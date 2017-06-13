@@ -1,4 +1,4 @@
-package openstack
+package driver
 
 import (
 	"fmt"
@@ -25,8 +25,8 @@ type Driver struct {
 	DomainName       string
 	Username         string
 	Password         string
-	TenantName       string
-	TenantId         string
+	ProjectName      string
+	ProjectID        string
 	Region           string
 	AvailabilityZone string
 	EndpointType     string
@@ -36,8 +36,7 @@ type Driver struct {
 	ImageName        string
 	ImageId          string
 	KeyPairName      string
-	NetworkName      string
-	NetworkId        string
+	SubnetId         string
 	UserData         []byte
 	PrivateKeyFile   string
 	SecurityGroups   []string
@@ -49,177 +48,172 @@ type Driver struct {
 }
 
 const (
-	defaultSSHUser       = "root"
-	defaultSSHPort       = 22
-	defaultActiveTimeout = 200
+	defaultSSHUser        = "root"
+	defaultSSHPort        = 22
+	defaultActiveTimeout  = 200
+	defaultFloatingIpPool = "admin_external_net"
 )
 
 func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 	return []mcnflag.Flag{
 		mcnflag.StringFlag{
 			EnvVar: "OS_AUTH_URL",
-			Name:   "openstack-auth-url",
-			Usage:  "OpenStack authentication URL",
+			Name:   "otc-auth-url",
+			Usage:  "Open Telekom Cloud authentication URL",
 			Value:  "",
 		},
 		mcnflag.BoolFlag{
 			EnvVar: "OS_INSECURE",
-			Name:   "openstack-insecure",
+			Name:   "otc-insecure",
 			Usage:  "Disable TLS credential checking.",
 		},
 		mcnflag.StringFlag{
 			EnvVar: "OS_CACERT",
-			Name:   "openstack-cacert",
+			Name:   "otc-cacert",
 			Usage:  "CA certificate bundle to verify against",
 			Value:  "",
 		},
 		mcnflag.StringFlag{
 			EnvVar: "OS_DOMAIN_ID",
-			Name:   "openstack-domain-id",
-			Usage:  "OpenStack domain ID (identity v3 only)",
+			Name:   "otc-domain-id",
+			Usage:  "Open Telekom Cloud domain ID (identity v3 only)",
 			Value:  "",
 		},
 		mcnflag.StringFlag{
 			EnvVar: "OS_DOMAIN_NAME",
-			Name:   "openstack-domain-name",
-			Usage:  "OpenStack domain name (identity v3 only)",
+			Name:   "otc-domain-name",
+			Usage:  "Open Telekom Cloud domain name (identity v3 only)",
 			Value:  "",
 		},
 		mcnflag.StringFlag{
 			EnvVar: "OS_USERNAME",
-			Name:   "openstack-username",
-			Usage:  "OpenStack username",
+			Name:   "otc-username",
+			Usage:  "Open Telekom Cloud username",
 			Value:  "",
 		},
 		mcnflag.StringFlag{
 			EnvVar: "OS_PASSWORD",
-			Name:   "openstack-password",
-			Usage:  "OpenStack password",
+			Name:   "otc-password",
+			Usage:  "Open Telekom Cloud password",
 			Value:  "",
 		},
 		mcnflag.StringFlag{
-			EnvVar: "OS_TENANT_NAME",
-			Name:   "openstack-tenant-name",
-			Usage:  "OpenStack tenant name",
+			EnvVar: "OS_PROJECT_NAME",
+			Name:   "otc-project-name",
+			Usage:  "Open Telekom Cloud project name",
 			Value:  "",
 		},
 		mcnflag.StringFlag{
-			EnvVar: "OS_TENANT_ID",
-			Name:   "openstack-tenant-id",
-			Usage:  "OpenStack tenant id",
+			EnvVar: "OS_PROJECT_ID",
+			Name:   "otc-project-id",
+			Usage:  "Open Telekom Cloud project id",
 			Value:  "",
 		},
 		mcnflag.StringFlag{
 			EnvVar: "OS_REGION_NAME",
-			Name:   "openstack-region",
-			Usage:  "OpenStack region name",
+			Name:   "otc-region",
+			Usage:  "Open Telekom Cloud region name",
 			Value:  "",
 		},
 		mcnflag.StringFlag{
 			EnvVar: "OS_AVAILABILITY_ZONE",
-			Name:   "openstack-availability-zone",
-			Usage:  "OpenStack availability zone",
+			Name:   "otc-availability-zone",
+			Usage:  "Open Telekom Cloud availability zone",
 			Value:  "",
 		},
 		mcnflag.StringFlag{
 			EnvVar: "OS_ENDPOINT_TYPE",
-			Name:   "openstack-endpoint-type",
-			Usage:  "OpenStack endpoint type (adminURL, internalURL or publicURL)",
+			Name:   "otc-endpoint-type",
+			Usage:  "Open Telekom Cloud endpoint type (adminURL, internalURL or publicURL)",
 			Value:  "",
 		},
 		mcnflag.StringFlag{
 			EnvVar: "OS_FLAVOR_ID",
-			Name:   "openstack-flavor-id",
-			Usage:  "OpenStack flavor id to use for the instance",
+			Name:   "otc-flavor-id",
+			Usage:  "Open Telekom Cloud flavor id to use for the instance",
 			Value:  "",
 		},
 		mcnflag.StringFlag{
 			EnvVar: "OS_FLAVOR_NAME",
-			Name:   "openstack-flavor-name",
-			Usage:  "OpenStack flavor name to use for the instance",
+			Name:   "otc-flavor-name",
+			Usage:  "Open Telekom Cloud flavor name to use for the instance",
 			Value:  "",
 		},
 		mcnflag.StringFlag{
 			EnvVar: "OS_IMAGE_ID",
-			Name:   "openstack-image-id",
-			Usage:  "OpenStack image id to use for the instance",
+			Name:   "otc-image-id",
+			Usage:  "Open Telekom Cloud image id to use for the instance",
 			Value:  "",
 		},
 		mcnflag.StringFlag{
 			EnvVar: "OS_IMAGE_NAME",
-			Name:   "openstack-image-name",
-			Usage:  "OpenStack image name to use for the instance",
+			Name:   "otc-image-name",
+			Usage:  "Open Telekom Cloud image name to use for the instance",
 			Value:  "",
 		},
 		mcnflag.StringFlag{
 			EnvVar: "OS_KEYPAIR_NAME",
-			Name:   "openstack-keypair-name",
-			Usage:  "OpenStack keypair to use to SSH to the instance",
+			Name:   "otc-keypair-name",
+			Usage:  "Open Telekom Cloud keypair to use to SSH to the instance",
 			Value:  "",
 		},
 		mcnflag.StringFlag{
-			EnvVar: "OS_NETWORK_ID",
-			Name:   "openstack-net-id",
-			Usage:  "OpenStack network id the machine will be connected on",
+			EnvVar: "OS_SUBNET_ID",
+			Name:   "otc-subnet-id",
+			Usage:  "Open Telekom Cloud network id the machine will be connected on",
 			Value:  "",
 		},
 		mcnflag.StringFlag{
 			EnvVar: "OS_PRIVATE_KEY_FILE",
-			Name:   "openstack-private-key-file",
+			Name:   "otc-private-key-file",
 			Usage:  "Private keyfile to use for SSH (absolute path)",
 			Value:  "",
 		},
 		mcnflag.StringFlag{
 			EnvVar: "OS_USER_DATA_FILE",
-			Name:   "openstack-user-data-file",
-			Usage:  "File containing an openstack userdata script",
-			Value:  "",
-		},
-		mcnflag.StringFlag{
-			EnvVar: "OS_NETWORK_NAME",
-			Name:   "openstack-net-name",
-			Usage:  "OpenStack network name the machine will be connected on",
+			Name:   "otc-user-data-file",
+			Usage:  "File containing an Open Telekom Cloud userdata script",
 			Value:  "",
 		},
 		mcnflag.StringFlag{
 			EnvVar: "OS_SECURITY_GROUPS",
-			Name:   "openstack-sec-groups",
-			Usage:  "OpenStack comma separated security groups for the machine",
+			Name:   "otc-sec-groups",
+			Usage:  "Open Telekom Cloud comma separated security groups for the machine",
 			Value:  "",
 		},
 		mcnflag.BoolFlag{
 			EnvVar: "OS_NOVA_NETWORK",
-			Name:   "openstack-nova-network",
+			Name:   "otc-nova-network",
 			Usage:  "Use the nova networking services instead of neutron.",
 		},
 		mcnflag.StringFlag{
 			EnvVar: "OS_FLOATINGIP_POOL",
-			Name:   "openstack-floatingip-pool",
-			Usage:  "OpenStack floating IP pool to get an IP from to assign to the instance",
-			Value:  "",
+			Name:   "otc-floatingip-pool",
+			Usage:  "Open Telekom Cloud floating IP pool to get an IP from to assign to the instance",
+			Value:  defaultFloatingIpPool,
 		},
 		mcnflag.IntFlag{
 			EnvVar: "OS_IP_VERSION",
-			Name:   "openstack-ip-version",
-			Usage:  "OpenStack version of IP address assigned for the machine",
+			Name:   "otc-ip-version",
+			Usage:  "Open Telekom Cloud version of IP address assigned for the machine",
 			Value:  4,
 		},
 		mcnflag.StringFlag{
 			EnvVar: "OS_SSH_USER",
-			Name:   "openstack-ssh-user",
-			Usage:  "OpenStack SSH user",
+			Name:   "otc-ssh-user",
+			Usage:  "Open Telekom Cloud SSH user",
 			Value:  defaultSSHUser,
 		},
 		mcnflag.IntFlag{
 			EnvVar: "OS_SSH_PORT",
-			Name:   "openstack-ssh-port",
-			Usage:  "OpenStack SSH port",
+			Name:   "otc-ssh-port",
+			Usage:  "Open Telekom Cloud SSH port",
 			Value:  defaultSSHPort,
 		},
 		mcnflag.IntFlag{
 			EnvVar: "OS_ACTIVE_TIMEOUT",
-			Name:   "openstack-active-timeout",
-			Usage:  "OpenStack active timeout",
+			Name:   "otc-active-timeout",
+			Usage:  "Open Telekom Cloud active timeout",
 			Value:  defaultActiveTimeout,
 		},
 	}
@@ -252,42 +246,41 @@ func (d *Driver) SetClient(client Client) {
 
 // DriverName returns the name of the driver
 func (d *Driver) DriverName() string {
-	return "openstack"
+	return "otc"
 }
 
 func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
-	d.AuthUrl = flags.String("openstack-auth-url")
-	d.ActiveTimeout = flags.Int("openstack-active-timeout")
-	d.Insecure = flags.Bool("openstack-insecure")
-	d.CaCert = flags.String("openstack-cacert")
-	d.DomainID = flags.String("openstack-domain-id")
-	d.DomainName = flags.String("openstack-domain-name")
-	d.Username = flags.String("openstack-username")
-	d.Password = flags.String("openstack-password")
-	d.TenantName = flags.String("openstack-tenant-name")
-	d.TenantId = flags.String("openstack-tenant-id")
-	d.Region = flags.String("openstack-region")
-	d.AvailabilityZone = flags.String("openstack-availability-zone")
-	d.EndpointType = flags.String("openstack-endpoint-type")
-	d.FlavorId = flags.String("openstack-flavor-id")
-	d.FlavorName = flags.String("openstack-flavor-name")
-	d.ImageId = flags.String("openstack-image-id")
-	d.ImageName = flags.String("openstack-image-name")
-	d.NetworkId = flags.String("openstack-net-id")
-	d.NetworkName = flags.String("openstack-net-name")
-	if flags.String("openstack-sec-groups") != "" {
-		d.SecurityGroups = strings.Split(flags.String("openstack-sec-groups"), ",")
+	d.AuthUrl = flags.String("otc-auth-url")
+	d.ActiveTimeout = flags.Int("otc-active-timeout")
+	d.Insecure = flags.Bool("otc-insecure")
+	d.CaCert = flags.String("otc-cacert")
+	d.DomainID = flags.String("otc-domain-id")
+	d.DomainName = flags.String("otc-domain-name")
+	d.Username = flags.String("otc-username")
+	d.Password = flags.String("otc-password")
+	d.ProjectName = flags.String("otc-project-name")
+	d.ProjectID = flags.String("otc-project-id")
+	d.Region = flags.String("otc-region")
+	d.AvailabilityZone = flags.String("otc-availability-zone")
+	d.EndpointType = flags.String("otc-endpoint-type")
+	d.FlavorId = flags.String("otc-flavor-id")
+	d.FlavorName = flags.String("otc-flavor-name")
+	d.ImageId = flags.String("otc-image-id")
+	d.ImageName = flags.String("otc-image-name")
+	d.SubnetId = flags.String("otc-subnet-id")
+	if flags.String("otc-sec-groups") != "" {
+		d.SecurityGroups = strings.Split(flags.String("otc-sec-groups"), ",")
 	}
-	d.FloatingIpPool = flags.String("openstack-floatingip-pool")
-	d.IpVersion = flags.Int("openstack-ip-version")
-	d.ComputeNetwork = flags.Bool("openstack-nova-network")
-	d.SSHUser = flags.String("openstack-ssh-user")
-	d.SSHPort = flags.Int("openstack-ssh-port")
-	d.KeyPairName = flags.String("openstack-keypair-name")
-	d.PrivateKeyFile = flags.String("openstack-private-key-file")
+	d.FloatingIpPool = flags.String("otc-floatingip-pool")
+	d.IpVersion = flags.Int("otc-ip-version")
+	d.ComputeNetwork = flags.Bool("otc-nova-network")
+	d.SSHUser = flags.String("otc-ssh-user")
+	d.SSHPort = flags.Int("otc-ssh-port")
+	d.KeyPairName = flags.String("otc-keypair-name")
+	d.PrivateKeyFile = flags.String("otc-private-key-file")
 
-	if flags.String("openstack-user-data-file") != "" {
-		userData, err := ioutil.ReadFile(flags.String("openstack-user-data-file"))
+	if flags.String("otc-user-data-file") != "" {
+		userData, err := ioutil.ReadFile(flags.String("otc-user-data-file"))
 		if err == nil {
 			d.UserData = userData
 		} else {
@@ -349,7 +342,7 @@ func (d *Driver) GetIP() (string, error) {
 }
 
 func (d *Driver) GetState() (state.State, error) {
-	log.Debug("Get status for OpenStack instance...", map[string]string{"MachineId": d.MachineId})
+	log.Debug("Get status for Open Telekom Cloud instance...", map[string]string{"MachineId": d.MachineId})
 	if err := d.initCompute(); err != nil {
 		return state.None, err
 	}
@@ -359,7 +352,7 @@ func (d *Driver) GetState() (state.State, error) {
 		return state.None, err
 	}
 
-	log.Debug("State for OpenStack instance", map[string]string{
+	log.Debug("State for Open Telekom Cloud instance", map[string]string{
 		"MachineId": d.MachineId,
 		"State":     s,
 	})
@@ -442,7 +435,7 @@ func (d *Driver) Kill() error {
 
 func (d *Driver) Remove() error {
 	log.Debug("deleting instance...", map[string]string{"MachineId": d.MachineId})
-	log.Info("Deleting OpenStack instance...")
+	log.Info("Deleting Open Telekom Cloud instance...")
 	if err := d.initCompute(); err != nil {
 		return err
 	}
@@ -458,48 +451,48 @@ func (d *Driver) Remove() error {
 }
 
 const (
-	errorMandatoryEnvOrOption    string = "%s must be specified either using the environment variable %s or the CLI option %s"
-	errorMandatoryOption         string = "%s must be specified using the CLI option %s"
-	errorExclusiveOptions        string = "Either %s or %s must be specified, not both"
-	errorBothOptions             string = "Both %s and %s must be specified"
-	errorMandatoryTenantNameOrID string = "Tenant id or name must be provided either using one of the environment variables OS_TENANT_ID and OS_TENANT_NAME or one of the CLI options --openstack-tenant-id and --openstack-tenant-name"
-	errorWrongEndpointType       string = "Endpoint type must be 'publicURL', 'adminURL' or 'internalURL'"
-	errorUnknownFlavorName       string = "Unable to find flavor named %s"
-	errorUnknownImageName        string = "Unable to find image named %s"
-	errorUnknownNetworkName      string = "Unable to find network named %s"
-	errorUnknownTenantName       string = "Unable to find tenant named %s"
+	errorMandatoryEnvOrOption     string = "%s must be specified either using the environment variable %s or the CLI option %s"
+	errorMandatoryOption          string = "%s must be specified using the CLI option %s"
+	errorExclusiveOptions         string = "Either %s or %s must be specified, not both"
+	errorBothOptions              string = "Both %s and %s must be specified"
+	errorMandatoryProjectNameOrID string = "Project id or name must be provided either using one of the environment variables OS_PROJECT_ID and OS_PROJECT_NAME or one of the CLI options --otc-project-id and --otc-project-name"
+	errorWrongEndpointType        string = "Endpoint type must be 'publicURL', 'adminURL' or 'internalURL'"
+	errorUnknownFlavorName        string = "Unable to find flavor named %s"
+	errorUnknownImageName         string = "Unable to find image named %s"
+	errorUnknownNetworkName       string = "Unable to find network named %s"
+	errorUnknownProjectName       string = "Unable to find project named %s"
 )
 
 func (d *Driver) checkConfig() error {
 	if d.AuthUrl == "" {
-		return fmt.Errorf(errorMandatoryEnvOrOption, "Authentication URL", "OS_AUTH_URL", "--openstack-auth-url")
+		return fmt.Errorf(errorMandatoryEnvOrOption, "Authentication URL", "OS_AUTH_URL", "--otc-auth-url")
 	}
 	if d.Username == "" {
-		return fmt.Errorf(errorMandatoryEnvOrOption, "Username", "OS_USERNAME", "--openstack-username")
+		return fmt.Errorf(errorMandatoryEnvOrOption, "Username", "OS_USERNAME", "--otc-username")
 	}
 	if d.Password == "" {
-		return fmt.Errorf(errorMandatoryEnvOrOption, "Password", "OS_PASSWORD", "--openstack-password")
+		return fmt.Errorf(errorMandatoryEnvOrOption, "Password", "OS_PASSWORD", "--otc-password")
 	}
-	if d.TenantName == "" && d.TenantId == "" {
-		return fmt.Errorf(errorMandatoryTenantNameOrID)
+	if d.ProjectName == "" && d.ProjectID == "" {
+		return fmt.Errorf(errorMandatoryProjectNameOrID)
 	}
 
 	if d.FlavorName == "" && d.FlavorId == "" {
-		return fmt.Errorf(errorMandatoryOption, "Flavor name or Flavor id", "--openstack-flavor-name or --openstack-flavor-id")
+		return fmt.Errorf(errorMandatoryOption, "Flavor name or Flavor id", "--otc-flavor-name or --otc-flavor-id")
 	}
 	if d.FlavorName != "" && d.FlavorId != "" {
 		return fmt.Errorf(errorExclusiveOptions, "Flavor name", "Flavor id")
 	}
 
 	if d.ImageName == "" && d.ImageId == "" {
-		return fmt.Errorf(errorMandatoryOption, "Image name or Image id", "--openstack-image-name or --openstack-image-id")
+		return fmt.Errorf(errorMandatoryOption, "Image name or Image id", "--otc-image-name or --otc-image-id")
 	}
 	if d.ImageName != "" && d.ImageId != "" {
 		return fmt.Errorf(errorExclusiveOptions, "Image name", "Image id")
 	}
 
-	if d.NetworkName != "" && d.NetworkId != "" {
-		return fmt.Errorf(errorExclusiveOptions, "Network name", "Network id")
+	if d.SubnetId == "" {
+		return fmt.Errorf(errorMandatoryOption, "Subnet id", "--otc-subnet-id")
 	}
 	if d.EndpointType != "" && (d.EndpointType != "publicURL" && d.EndpointType != "adminURL" && d.EndpointType != "internalURL") {
 		return fmt.Errorf(errorWrongEndpointType)
@@ -511,28 +504,6 @@ func (d *Driver) checkConfig() error {
 }
 
 func (d *Driver) resolveIds() error {
-	if d.NetworkName != "" && !d.ComputeNetwork {
-		if err := d.initNetwork(); err != nil {
-			return err
-		}
-
-		networkID, err := d.client.GetNetworkID(d)
-
-		if err != nil {
-			return err
-		}
-
-		if networkID == "" {
-			return fmt.Errorf(errorUnknownNetworkName, d.NetworkName)
-		}
-
-		d.NetworkId = networkID
-		log.Debug("Found network id using its name", map[string]string{
-			"Name": d.NetworkName,
-			"ID":   d.NetworkId,
-		})
-	}
-
 	if d.FlavorName != "" {
 		if err := d.initCompute(); err != nil {
 			return err
@@ -596,24 +567,24 @@ func (d *Driver) resolveIds() error {
 		})
 	}
 
-	if d.TenantName != "" && d.TenantId == "" {
+	if d.ProjectName != "" && d.ProjectID == "" {
 		if err := d.initIdentity(); err != nil {
 			return err
 		}
-		tenantId, err := d.client.GetTenantID(d)
+		projectID, err := d.client.GetProjectID(d)
 
 		if err != nil {
 			return err
 		}
 
-		if tenantId == "" {
-			return fmt.Errorf(errorUnknownTenantName, d.TenantName)
+		if projectID == "" {
+			return fmt.Errorf(errorUnknownProjectName, d.ProjectName)
 		}
 
-		d.TenantId = tenantId
-		log.Debug("Found tenant id using its name", map[string]string{
-			"Name": d.TenantName,
-			"ID":   d.TenantId,
+		d.ProjectID = projectID
+		log.Debug("Found project id using its name", map[string]string{
+			"Name": d.ProjectName,
+			"ID":   d.ProjectID,
 		})
 	}
 
@@ -695,7 +666,7 @@ func (d *Driver) createSSHKey() error {
 }
 
 func (d *Driver) createMachine() error {
-	log.Debug("Creating OpenStack instance...", map[string]string{
+	log.Debug("Creating Open Telekom Cloud instance...", map[string]string{
 		"FlavorId": d.FlavorId,
 		"ImageId":  d.ImageId,
 	})
@@ -762,7 +733,7 @@ func (d *Driver) assignFloatingIP() error {
 }
 
 func (d *Driver) waitForInstanceActive() error {
-	log.Debug("Waiting for the OpenStack instance to be ACTIVE...", map[string]string{"MachineId": d.MachineId})
+	log.Debug("Waiting for the Open Telekom Cloud instance to be ACTIVE...", map[string]string{"MachineId": d.MachineId})
 	if err := d.client.WaitForInstanceStatus(d, "ACTIVE"); err != nil {
 		return err
 	}
