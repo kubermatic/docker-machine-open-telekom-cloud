@@ -1,12 +1,12 @@
-hash: 23ea93249b9a00310b9f06978542a6fd5c8f92df18d5cf5239496cac4de2ad95
-updated: 2017-03-23T16:56:29.980808847-04:00
+hash: 70892d759a3451c625cc6d54e79691a2325e4d1d377daeb38354909ca5cefa14
+updated: 2017-06-07T15:26:00.325197112+02:00
 imports:
 - name: github.com/docker/docker
   version: a8a31eff10544860d2188dddabdee4d727545796
   subpackages:
   - pkg/term
 - name: github.com/docker/machine
-  version: 0f08d3c510bc8c2a2c087cabd6614d8776ca8687
+  version: 5b274558ea6ca822c06dd407a4e774a0105c3f60
   subpackages:
   - libmachine/drivers
   - libmachine/drivers/plugin

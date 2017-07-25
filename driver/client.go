@@ -1,4 +1,4 @@
-package openstack
+package driver
 
 import (
 	"crypto/tls"
@@ -19,7 +19,7 @@ import (
 	"github.com/gophercloud/gophercloud/openstack/compute/v2/flavors"
 	"github.com/gophercloud/gophercloud/openstack/compute/v2/images"
 	"github.com/gophercloud/gophercloud/openstack/compute/v2/servers"
-	"github.com/gophercloud/gophercloud/openstack/identity/v2/tenants"
+	"github.com/gophercloud/gophercloud/openstack/identity/v3/projects"
 	"github.com/gophercloud/gophercloud/openstack/networking/v2/extensions/layer3/floatingips"
 	"github.com/gophercloud/gophercloud/openstack/networking/v2/networks"
 	"github.com/gophercloud/gophercloud/openstack/networking/v2/ports"
@@ -43,14 +43,13 @@ type Client interface {
 	GetPublicKey(keyPairName string) ([]byte, error)
 	CreateKeyPair(d *Driver, name string, publicKey string) error
 	DeleteKeyPair(d *Driver, name string) error
-	GetNetworkID(d *Driver) (string, error)
 	GetFlavorID(d *Driver) (string, error)
 	GetImageID(d *Driver) (string, error)
 	AssignFloatingIP(d *Driver, floatingIP *FloatingIP) error
 	GetFloatingIPs(d *Driver) ([]FloatingIP, error)
 	GetFloatingIPPoolID(d *Driver) (string, error)
 	GetInstancePortID(d *Driver) (string, error)
-	GetTenantID(d *Driver) (string, error)
+	GetProjectID(d *Driver) (string, error)
 }
 
 type GenericClient struct {
@@ -69,14 +68,14 @@ func (c *GenericClient) CreateInstance(d *Driver) (string, error) {
 		SecurityGroups:   d.SecurityGroups,
 		AvailabilityZone: d.AvailabilityZone,
 	}
-	if d.NetworkId != "" {
+
+	if d.SubnetId != "" {
 		serverOpts.Networks = []servers.Network{
 			{
-				UUID: d.NetworkId,
+				UUID: d.SubnetId,
 			},
 		}
 	}
-
 	log.Info("Creating machine...")
 
 	server, err := servers.Create(c.Compute, keypairs.CreateOptsExt{
@@ -203,10 +202,6 @@ func (c *GenericClient) GetInstanceIPAddresses(d *Driver) ([]IPAddress, error) {
 	return addresses, nil
 }
 
-func (c *GenericClient) GetNetworkID(d *Driver) (string, error) {
-	return c.getNetworkID(d, d.NetworkName)
-}
-
 func (c *GenericClient) GetFloatingIPPoolID(d *Driver) (string, error) {
 	return c.getNetworkID(d, d.FloatingIpPool)
 }
@@ -282,19 +277,20 @@ func (c *GenericClient) GetImageID(d *Driver) (string, error) {
 	return imageID, err
 }
 
-func (c *GenericClient) GetTenantID(d *Driver) (string, error) {
-	pager := tenants.List(c.Identity, nil)
-	tenantId := ""
+func (c *GenericClient) GetProjectID(d *Driver) (string, error) {
+	pager := projects.List(c.Identity, nil)
+	projectID := ""
 
 	err := pager.EachPage(func(page pagination.Page) (bool, error) {
-		tenantList, err := tenants.ExtractTenants(page)
+
+		projectList, err := projects.ExtractProjects(page)
 		if err != nil {
 			return false, err
 		}
 
-		for _, i := range tenantList {
-			if i.Name == d.TenantName {
-				tenantId = i.ID
+		for _, p := range projectList {
+			if p.Name == d.ProjectName {
+				projectID = p.ID
 				return false, nil
 			}
 		}
@@ -302,7 +298,7 @@ func (c *GenericClient) GetTenantID(d *Driver) (string, error) {
 		return true, nil
 	})
 
-	return tenantId, err
+	return projectID, err
 }
 
 func (c *GenericClient) GetPublicKey(keyPairName string) ([]byte, error) {
@@ -402,7 +398,7 @@ func (c *GenericClient) getNovaNetworkFloatingIPs(d *Driver) ([]FloatingIP, erro
 	ips := []FloatingIP{}
 	err := pager.EachPage(func(page pagination.Page) (continue_paging bool, err error) {
 		continue_paging, err = true, nil
-		ipListing, _ := compute_ips.ExtractFloatingIPs(page)
+		ipListing, err := compute_ips.ExtractFloatingIPs(page)
 
 		for _, ip := range ipListing {
 			if ip.InstanceID == "" && ip.Pool == d.FloatingIpPool {
@@ -421,11 +417,11 @@ func (c *GenericClient) getNovaNetworkFloatingIPs(d *Driver) ([]FloatingIP, erro
 func (c *GenericClient) getNeutronNetworkFloatingIPs(d *Driver) ([]FloatingIP, error) {
 	log.Debug("Listing floating IPs", map[string]string{
 		"FloatingNetworkId": d.FloatingIpPoolId,
-		"TenantID":          d.TenantId,
+		"TenantID":          d.ProjectID,
 	})
 	pager := floatingips.List(c.Network, floatingips.ListOpts{
 		FloatingNetworkID: d.FloatingIpPoolId,
-		TenantID:          d.TenantId,
+		TenantID:          d.ProjectID,
 	})
 
 	ips := []FloatingIP{}
@@ -454,7 +450,7 @@ func (c *GenericClient) getNeutronNetworkFloatingIPs(d *Driver) ([]FloatingIP, e
 func (c *GenericClient) GetInstancePortID(d *Driver) (string, error) {
 	pager := ports.List(c.Network, ports.ListOpts{
 		DeviceID:  d.MachineId,
-		NetworkID: d.NetworkId,
+		NetworkID: d.SubnetId,
 	})
 
 	var portID string
@@ -497,7 +493,7 @@ func (c *GenericClient) InitIdentityClient(d *Driver) error {
 		return nil
 	}
 
-	identity, err := openstack.NewIdentityV2(c.Provider, gophercloud.EndpointOpts{
+	identity, err := openstack.NewIdentityV3(c.Provider, gophercloud.EndpointOpts{
 		Region:       d.Region,
 		Availability: c.getEndpointType(d),
 	})
@@ -540,14 +536,14 @@ func (c *GenericClient) Authenticate(d *Driver) error {
 	}
 
 	log.Debug("Authenticating...", map[string]interface{}{
-		"AuthUrl":    d.AuthUrl,
-		"Insecure":   d.Insecure,
-		"CaCert":     d.CaCert,
-		"DomainID":   d.DomainID,
-		"DomainName": d.DomainName,
-		"Username":   d.Username,
-		"TenantName": d.TenantName,
-		"TenantID":   d.TenantId,
+		"AuthUrl":     d.AuthUrl,
+		"Insecure":    d.Insecure,
+		"CaCert":      d.CaCert,
+		"DomainID":    d.DomainID,
+		"DomainName":  d.DomainName,
+		"Username":    d.Username,
+		"ProjectName": d.ProjectName,
+		"ProjectID":   d.ProjectID,
 	})
 
 	opts := gophercloud.AuthOptions{
@@ -556,8 +552,8 @@ func (c *GenericClient) Authenticate(d *Driver) error {
 		DomainName:       d.DomainName,
 		Username:         d.Username,
 		Password:         d.Password,
-		TenantName:       d.TenantName,
-		TenantID:         d.TenantId,
+		TenantName:       d.ProjectName,
+		TenantID:         d.ProjectID,
 		AllowReauth:      true,
 	}
 

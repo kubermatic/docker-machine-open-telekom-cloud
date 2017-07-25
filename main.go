@@ -1,10 +1,10 @@
 package main
 
 import (
-	"git.openstack.org/openstack/docker-machine-openstack/driver"
 	"github.com/docker/machine/libmachine/drivers/plugin"
+	"github.com/kubermatic/docker-machine-openstack/driver"
 )
 
 func main() {
-	plugin.RegisterDriver(openstack.NewDriver("default", "path"))
+	plugin.RegisterDriver(driver.NewDriver("default", "path"))
 }
